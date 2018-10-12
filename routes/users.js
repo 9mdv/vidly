@@ -1,15 +1,21 @@
+const auth = require('../middleware/auth')
 const _ = require('lodash')
 const bcrypt = require('bcrypt')
 const { User, validate } = require('../models/user')
 const express = require('express')
 const router = express.Router()
 
-router.get('/', async (req, res) => {
+router.get('/me', auth, async (req, res) => {
+  const user = await User.findById(req.user._id).select('-password')
+  res.send(user)
+})
+
+router.get('/', auth, async (req, res) => {
   const users = await User.find().sort('name')
   res.send(users)
 })
 
-router.post('/', async (req, res) => {
+router.post('/', auth, async (req, res) => {
   const { error } = validate(req.body)
   if (error) return res.status(400).send(error.details[0].message)
 
@@ -21,10 +27,11 @@ router.post('/', async (req, res) => {
   user.password = await bcrypt.hash(user.password, salt)
   await user.save()
 
-  res.send(_.pick(user, ['_id', 'name', 'email']))
+  const token = user.generateAuthToken()
+  res.header('x-auth-token', token).send(_.pick(user, ['_id', 'name', 'email']))
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', auth, async (req, res) => {
   const { error } = validate(req.body)
   if (error) return res.status(400).send(error.details[0].message)
 
@@ -44,7 +51,7 @@ router.put('/:id', async (req, res) => {
   res.send(user)
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', auth, async (req, res) => {
   const user = await User.findByIdAndRemove(req.params.id)
 
   if (!user)
